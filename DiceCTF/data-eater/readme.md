@@ -30,6 +30,16 @@ int main(int argc, const char **argv, const char **envp)
   return 0;
 }
 ```
+The program starts by clearing all arguments and environment variables.
+Then it allows us to write 8 bytes to a local variable using fgets.
+The result of this is used as the format string for a scanf call immediately after
+
+Having control over the first argument of `scanf` means we can write anything we want. However, we need pointers to the addresses we want to write to. The program already sets the second argument to `buf` for us, so we can always write here. But to take control of RIP, we need to write to the stack. Let's take a look at the stack and registers before the call to `scanf`
+
+
+## solution:
 There’s usually a pointer to `link_map` on the stack somewhere, so just write some data to `buf` and overwrite the `DT_STRTAB` pointer in `link_map->l_info`.
 
 The offset to `link_map` varies a little bit but this should cover most of the possibilities.
+
+https://github.com/Green-Avocado/CTF/tree/main/dicectf2022/pwn/data-eater
