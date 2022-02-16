@@ -9,3 +9,4 @@ while(i < len(target)):
             r += x
             i += len(x)
 print(r)
+#  [ola_th1s_1s_p0l]
